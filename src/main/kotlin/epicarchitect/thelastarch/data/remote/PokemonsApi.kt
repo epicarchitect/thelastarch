@@ -54,7 +54,6 @@ class PokemonsApi(
         )
     }
 
-
     data class Pokemon(
         val name: String,
         val sprites: Sprites
