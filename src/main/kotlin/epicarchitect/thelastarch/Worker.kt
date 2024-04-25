@@ -18,16 +18,16 @@ class Worker {
     val resultStateMap = mutableMapOf<Any, Work>()
 
     inline fun <reified T> execute(
-        key: WorkerKey<T>,
-        executionConflictPolicy: ExecutionConflictPolicy = key.defaultExecutionConflictPolicy,
+        key: Key<T>,
+        executionConflictPolicy: ConflictPolicy = key.conflictPolicy,
         noinline action: suspend FlowCollector<T>.(lastValue: T?) -> Unit
     ) {
         val work = resultStateMap.getOrPut(key) { Work() }
-        if (executionConflictPolicy == ExecutionConflictPolicy.SKIP && work.job?.isActive == true) {
+        if (executionConflictPolicy == ConflictPolicy.SKIP && work.job?.isActive == true) {
             return
         }
 
-        if (executionConflictPolicy == ExecutionConflictPolicy.REPLACE) {
+        if (executionConflictPolicy == ConflictPolicy.REPLACE) {
             work.job?.cancel()
             work.job = null
         }
@@ -45,7 +45,7 @@ class Worker {
     }
 
     inline fun <reified T> state(
-        key: WorkerKey<T>
+        key: Key<T>
     ) = resultStateMap.getOrPut(key) { Work() }.state as StateFlow<T?>
 
     fun cancel(key: Any) {
@@ -61,21 +61,17 @@ class Worker {
         val state = MutableStateFlow<Any?>(null)
     }
 
-    enum class ExecutionConflictPolicy {
+    enum class ConflictPolicy {
         REPLACE,
         SKIP,
         APPEND,
     }
 
+    class Key<T>(
+        val conflictPolicy: ConflictPolicy = ConflictPolicy.APPEND
+    )
+
     companion object {
         val global = Worker()
     }
 }
-
-class WorkerKey<T>(
-    val defaultExecutionConflictPolicy: Worker.ExecutionConflictPolicy
-)
-
-inline fun <reified T> workerKey(
-    defaultExecutionConflictPolicy: Worker.ExecutionConflictPolicy = Worker.ExecutionConflictPolicy.APPEND
-) = WorkerKey<T>(defaultExecutionConflictPolicy)

@@ -18,12 +18,11 @@ import epicarchitect.thelastarch.data.remote.Network
 import epicarchitect.thelastarch.data.remote.PokemonsApi
 import epicarchitect.thelastarch.databinding.PokemonItemBinding
 import epicarchitect.thelastarch.databinding.PokemonsFragmentBinding
-import epicarchitect.thelastarch.workerKey
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 
-private val AppendPokemonPageKey = workerKey<AppendPokemonPage.Data>(
-    defaultExecutionConflictPolicy = Worker.ExecutionConflictPolicy.SKIP
+private val AppendNextPokemonPageKey = Worker.Key<AppendPokemonPage.Data>(
+    conflictPolicy = Worker.ConflictPolicy.SKIP
 )
 
 class PokemonsFragment : Fragment() {
@@ -44,7 +43,7 @@ class PokemonsFragment : Fragment() {
             object : OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     if (recyclerView.computeVerticalScrollOffset() > recyclerView.height) {
-                        loadNextPage()
+                        appendNextPokemonPage()
                     }
                 }
             }
@@ -61,9 +60,9 @@ class PokemonsFragment : Fragment() {
             }
         }
 
-        Worker.global.state(AppendPokemonPageKey).onEach {
+        Worker.global.state(AppendNextPokemonPageKey).onEach {
             if (it == null) {
-                loadNextPage()
+                appendNextPokemonPage()
             }
 
             binding.pokemonsRecyclerView.isVisible = it != null
@@ -79,11 +78,11 @@ class PokemonsFragment : Fragment() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Worker.global.cancel(AppendPokemonPageKey)
+        Worker.global.cancel(AppendNextPokemonPageKey)
     }
 
-    private fun loadNextPage() {
-        Worker.global.execute(AppendPokemonPageKey) {
+    private fun appendNextPokemonPage() {
+        Worker.global.execute(AppendNextPokemonPageKey) {
             emit(
                 AppendPokemonPage(
                     pokemonsApi = Network.pokemons,
