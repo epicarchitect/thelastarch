@@ -1,4 +1,4 @@
-package epicarchitect.thelastarch.data.remote
+package epicarchitect.thelastarch.tools
 
 import okhttp3.Response
 

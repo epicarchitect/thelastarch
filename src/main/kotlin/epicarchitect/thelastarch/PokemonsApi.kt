@@ -1,7 +1,8 @@
-package epicarchitect.thelastarch.data.remote
+package epicarchitect.thelastarch
 
 import android.net.Uri
 import androidx.core.net.toUri
+import epicarchitect.thelastarch.tools.NetworkResponse
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject

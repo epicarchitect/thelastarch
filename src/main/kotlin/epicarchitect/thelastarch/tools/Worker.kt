@@ -1,45 +1,52 @@
 @file:Suppress("UNCHECKED_CAST")
 
-package epicarchitect.thelastarch
+package epicarchitect.thelastarch.tools
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class Worker {
-    val coroutineScope = CoroutineScope(Dispatchers.Default)
+class Worker(val name: String) {
     val resultStateMap = mutableMapOf<Any, Work>()
 
     inline fun <reified T> execute(
         key: Key<T>,
-        executionConflictPolicy: ConflictPolicy = key.conflictPolicy,
+        executionConflictPolicy: ConflictPolicy = ConflictPolicy.APPEND,
         noinline action: suspend FlowCollector<T>.(lastValue: T?) -> Unit
     ) {
+        Log.d("Worker-$name", "$key -> execute")
         val work = resultStateMap.getOrPut(key) { Work() }
-        if (executionConflictPolicy == ConflictPolicy.SKIP && work.job?.isActive == true) {
+        if (executionConflictPolicy == ConflictPolicy.SKIP &&
+            work.coroutineScope.coroutineContext.job.children.any { it.isActive }
+        ) {
+            Log.d("Worker-$name", "$key -> skip")
             return
         }
 
         if (executionConflictPolicy == ConflictPolicy.REPLACE) {
-            work.job?.cancel()
-            work.job = null
+            Log.d("Worker-$name", "$key -> replace")
+            work.coroutineScope.coroutineContext.cancelChildren()
         }
 
-        work.job = coroutineScope.launch {
+        work.coroutineScope.launch {
+            Log.d("Worker-$name", "$key -> append")
             work.mutex.withLock {
+                Log.d("Worker-$name", "$key -> execute")
                 val lastValue = work.state.value
                 flow {
                     action(lastValue as? T)
-                }.collect {
-                    work.state.value = it
-                }
+                }.collect(work.state)
+                Log.d("Worker-$name", "$key -> executed")
             }
         }
     }
@@ -51,12 +58,12 @@ class Worker {
     fun cancel(key: Any) {
         val entry = resultStateMap.remove(key) ?: return
         entry.state.value = null
-        entry.job?.cancel()
-        entry.job = null
+        entry.coroutineScope.cancel()
+        Log.d("Worker-$name", "$key -> canceled")
     }
 
     class Work {
-        var job: Job? = null
+        val coroutineScope = CoroutineScope(Dispatchers.Default)
         val mutex: Mutex = Mutex()
         val state = MutableStateFlow<Any?>(null)
     }
@@ -67,11 +74,5 @@ class Worker {
         APPEND,
     }
 
-    class Key<T>(
-        val conflictPolicy: ConflictPolicy = ConflictPolicy.APPEND
-    )
-
-    companion object {
-        val global = Worker()
-    }
+    class Key<T>
 }
